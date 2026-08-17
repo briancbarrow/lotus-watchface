@@ -1,0 +1,57 @@
+{
+  "name": "lotus-watchface",
+  "author": "Brian Barrow",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "White Lotus",
+    "uuid": "bdece521-da16-4697-aac3-c4f7f648abe6",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "emery"
+    ],
+    "watchapp": {
+      "watchface": true
+    },
+    "messageKeys": [
+      "TEMP",
+      "ICON",
+      "FETCH"
+    ],
+    "resources": {
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "IMAGE_MENU_ICON",
+          "file": "images/menu_icon.png",
+          "menuIcon": true
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_TILE",
+          "file": "images/lotus_emery.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_WEATHER_ICONS",
+          "file": "images/weather_icons.png"
+        },
+        {
+          "type": "font",
+          "name": "FONT_TIME_38",
+          "file": "fonts/time.ttf",
+          "characterRegex": "[0-9:]"
+        },
+        {
+          "type": "font",
+          "name": "FONT_INFO_22",
+          "file": "fonts/info.ttf",
+          "characterRegex": "[A-Z0-9 °]"
+        }
+      ]
+    }
+  }
+}
