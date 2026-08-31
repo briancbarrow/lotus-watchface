@@ -5,8 +5,8 @@
 // White Lotus watchface for emery (Pebble Time 2, 200x228).
 //
 // The whole face is one layer with a single update proc, in two blocks: a
-// header carrying the time, the day, the date, the weather and the status
-// icons, and the tile's flower under it as a bitmap. Everything is drawn from
+// header -- an info row of day, date, weather and battery, with the time under
+// it -- and the tile's flower below as a bitmap. Everything is drawn from
 // cached strings so the update proc never formats anything itself.
 
 // ---------------------------------------------------------------------------
@@ -30,25 +30,38 @@
 // White Lotus tile at all -- so the time there would cover the one part of the
 // artwork worth keeping. Off it, the time gets the full screen width instead of
 // a chord across a medallion, which is why it can be this large.
-#define TIME_LEFT 0
-#define TIME_WIDTH 200
-#define TIME_TOP 0
-#define TIME_HEIGHT 48
 
-// A hairline parts the time from the row under it. There is no fill behind
+// The info row runs across the very top: the day and date on the left, then the
+// weather icon, the temperature, and the battery gauge in the corner -- one
+// line, four things.
+//
+// Fitting all four is what sets the info font size. At 22px the widest date the
+// clock can produce, "WED SEPT 30", is 104px, and 104 + the icon + the
+// temperature + the gauge overruns 200 by about 20. Dropping the weekday would
+// buy it back at a stroke, but the weekday is half of why anyone reads a date on
+// a watch. 18px keeps the whole date and still clears the gauge, so the row
+// gives up type size rather than information. tools/mockup.py measures it.
+//
+// The icon rides 2px higher than the text so their optical centres line up, and
+// the gauge is centred on the icon.
+#define INFO_TOP 4
+#define INFO_HEIGHT 24
+#define ICON_TOP 2
+#define EDGE_PAD 6
+#define INFO_GAP 6
+
+// A hairline parts the info row from the time under it. There is no fill behind
 // either: the window's black is already the black the artwork's own ground is
 // drawn in, so there is no seam to hide, and a slab of colour under a
 // black-and-white flower would be the only loud thing on the screen.
-#define RULE_TOP 48
+#define RULE_TOP 32
 #define RULE_H 1
 #define RULE_COLOR GColorWhite
 
-// The day, date and weather, in one row under the rule. The icon rides 2px
-// higher than the text so their optical centres line up.
-#define ICON_TOP 50
-#define INFO_TOP 52
-#define INFO_HEIGHT 26
-#define EDGE_PAD 6
+#define TIME_LEFT 0
+#define TIME_WIDTH 200
+#define TIME_TOP 34
+#define TIME_HEIGHT 48
 
 // The flower gets whatever the header does not, and ART_H is fixed, so this is
 // forced: 82 + 146 = 228, the whole screen, with nothing spare in either
@@ -59,16 +72,23 @@
 #define ICON_W 32
 #define ICON_H 28
 #define ICON_GAP 2
-// Width reserved for the temperature, enough for "100°". What is left of the
-// row after the icon and this goes to the date, which is why the info font is
-// condensed. tools/mockup.py prints both.
-#define INFO_TEMP_W 36
+// Width reserved for the temperature, enough for "100°" at the info size. What
+// is left of the row after the battery, this and the icon goes to the date,
+// which is why the info font is condensed. tools/mockup.py prints both.
+#define INFO_TEMP_W 30
 
 #define BATT_W 21
 #define BATT_H 10
 #define BATT_RIGHT_PAD 6
-#define BATT_TOP 4
+// Centred on the weather icon it shares the row with: ICON_TOP + (ICON_H - BATT_H) / 2.
+#define BATT_TOP 11
+// The bluetooth icon has no corner left in the info row, so it goes at the left
+// end of the time row -- which is empty, because the time is centred and at its
+// widest reaches only x=48. Drawn from y-1 to y+11, so this centres it on the
+// time row.
 #define BT_W 12
+#define BT_LEFT EDGE_PAD
+#define BT_TOP (TIME_TOP + (TIME_HEIGHT - 12) / 2 + 1)
 
 // The tile is black and white, so the whole face is.
 #define INFO_COLOR GColorWhite
@@ -144,9 +164,6 @@ static void prv_set_weather_icon(int index) {
   }
 }
 
-// The status icons take the two top corners, with the time centred between them.
-// At its widest -- "23:58" -- the time is 103px of the 200, so there is room on
-// both sides; tools/mockup.py checks both gaps.
 static void prv_draw_battery(GContext *ctx, GRect bounds) {
   const int x = bounds.size.w - BATT_RIGHT_PAD - BATT_W - 3;  // 3px for the nub
 
@@ -175,12 +192,9 @@ static void prv_draw_bluetooth(GContext *ctx, GRect bounds) {
   if (s_connected) {
     return;
   }
-  // In the opposite corner from the battery rather than beside it. Beside it,
-  // the pair reached far enough in from the right that a 24h "23:58" came
-  // within a pixel of the icon; split across the two corners, the time has the
-  // same room on either side and neither icon is anywhere near it.
-  const int x = EDGE_PAD;
-  const int y = BATT_TOP;
+  (void)bounds;
+  const int x = BT_LEFT;
+  const int y = BT_TOP;
   graphics_context_set_stroke_color(ctx, STATUS_COLOR);
   graphics_context_set_stroke_width(ctx, 2);
   graphics_draw_line(ctx, GPoint(x, y + 2), GPoint(x + 7, y + 8));
@@ -212,20 +226,21 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
                      GRect(TIME_LEFT, TIME_TOP, TIME_WIDTH, TIME_HEIGHT),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // The weather sits against the right edge; the date gets everything to the
-  // left of it, so it never has to be truncated.
-  const int icon_x = bounds.size.w - EDGE_PAD - INFO_TEMP_W - ICON_GAP - ICON_W;
+  // The battery holds the right end of the row, the weather sits inboard of it,
+  // and the date gets everything left of that, so the date is never truncated.
+  const int batt_x = bounds.size.w - BATT_RIGHT_PAD - BATT_W - 3;
+  const int temp_x = batt_x - INFO_GAP - INFO_TEMP_W;
+  const int icon_x = temp_x - ICON_GAP - ICON_W;
 
   graphics_context_set_text_color(ctx, INFO_COLOR);
   graphics_draw_text(ctx, s_date_text, s_info_font,
-                     GRect(EDGE_PAD, INFO_TOP, icon_x - EDGE_PAD - ICON_GAP, INFO_HEIGHT),
+                     GRect(EDGE_PAD, INFO_TOP, icon_x - EDGE_PAD - INFO_GAP, INFO_HEIGHT),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
   if (s_has_weather) {
-    graphics_draw_text(
-        ctx, s_temp_text, s_info_font,
-        GRect(bounds.size.w - EDGE_PAD - INFO_TEMP_W, INFO_TOP, INFO_TEMP_W, INFO_HEIGHT),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+    graphics_draw_text(ctx, s_temp_text, s_info_font,
+                       GRect(temp_x, INFO_TOP, INFO_TEMP_W, INFO_HEIGHT),
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
     if (s_weather_icon) {
       graphics_context_set_compositing_mode(ctx, GCompOpSet);
       graphics_draw_bitmap_in_rect(ctx, s_weather_icon,
@@ -338,7 +353,7 @@ static void prv_window_load(Window *window) {
   s_tile = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_TILE);
   s_weather_sheet = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_WEATHER_ICONS);
   s_time_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TIME_38));
-  s_info_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_INFO_22));
+  s_info_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_INFO_18));
 
   s_canvas = layer_create(bounds);
   layer_set_update_proc(s_canvas, prv_canvas_update);
