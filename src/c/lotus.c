@@ -4,58 +4,93 @@
 
 // White Lotus watchface for emery (Pebble Time 2, 200x228).
 //
-// The whole face is one layer with a single update proc, in three bands: the
-// tile's flower across the top as a bitmap, the time under it, and a strip
-// across the bottom carrying the day, date and weather. Everything is drawn
-// from cached strings so the update proc never formats anything itself.
+// The whole face is one layer with a single update proc, in two blocks: a
+// header -- an info row of day, date, weather and battery, with the time under
+// it -- and the tile's flower below as a bitmap. Everything is drawn from
+// cached strings so the update proc never formats anything itself.
 
 // ---------------------------------------------------------------------------
 // LAYOUT -- keep in sync with tools/build_assets.py and tools/mockup.py
 // ---------------------------------------------------------------------------
 // The tile artwork is traced by tools/build_assets.py, which owns its geometry.
-// Only ART_H matters here: the bitmap covers y=0..145 and the time band starts
-// where it stops.
+// Only ART_H matters here: the bitmap is that tall and gets placed at ART_TOP.
 #define ART_H 146
 
-// The time sits below the flower rather than on it. The tile's centre is a seed
-// pod of small dots -- the thing that identifies it as the White Lotus tile at
-// all -- so putting the time there would mean drawing over the one part of the
-// artwork worth keeping. Below it, the time gets the full screen width instead
-// of a chord across a medallion, which is why it can be this large.
+// Every readable thing is in a header above the flower.
+//
+// A timeline peek slides up from the bottom of the screen and holds a band of it
+// for as long as it is up. Whatever sits down there is hidden for that whole
+// time, so the question is what the face can afford to lose. Not the time, and
+// not the date or the weather either -- they are the reason to look at a
+// watchface at all. The flower can: it is the same flower it was a second ago,
+// and half of it still reads as the tile.
+//
+// The time is off the flower rather than on it for a separate reason. The tile's
+// centre is a seed pod of small dots -- the thing that identifies it as the
+// White Lotus tile at all -- so the time there would cover the one part of the
+// artwork worth keeping. Off it, the time gets the full screen width instead of
+// a chord across a medallion, which is why it can be this large.
+
+// The info row runs across the very top: the day and date on the left, then the
+// weather icon, the temperature, and the battery gauge in the corner -- one
+// line, four things.
+//
+// Fitting all four is what sets the info font size. At 22px the widest date the
+// clock can produce, "WED SEPT 30", is 104px, and 104 + the icon + the
+// temperature + the gauge overruns 200 by about 20. Dropping the weekday would
+// buy it back at a stroke, but the weekday is half of why anyone reads a date on
+// a watch. 18px keeps the whole date and still clears the gauge, so the row
+// gives up type size rather than information. tools/mockup.py measures it.
+//
+// The icon rides 2px higher than the text so their optical centres line up, and
+// the gauge is centred on the icon.
+#define INFO_TOP 4
+#define INFO_HEIGHT 24
+#define ICON_TOP 2
+#define EDGE_PAD 6
+#define INFO_GAP 6
+
+// A hairline parts the info row from the time under it. There is no fill behind
+// either: the window's black is already the black the artwork's own ground is
+// drawn in, so there is no seam to hide, and a slab of colour under a
+// black-and-white flower would be the only loud thing on the screen.
+#define RULE_TOP 32
+#define RULE_H 1
+#define RULE_COLOR GColorWhite
+
 #define TIME_LEFT 0
 #define TIME_WIDTH 200
-#define TIME_TOP ART_H
+#define TIME_TOP 34
 #define TIME_HEIGHT 48
 
-// The info strip.
-#define PANEL_TOP 196
-#define PANEL_RULE 1
-#define INFO_TOP 200
-#define INFO_HEIGHT 26
-#define EDGE_PAD 6
+// The flower gets whatever the header does not, and ART_H is fixed, so this is
+// forced: 82 + 146 = 228, the whole screen, with nothing spare in either
+// direction. Growing the header means regenerating the art shorter.
+#define ART_TOP 82
 // Frame size in resources/images/weather_icons.png. ICON_W must stay a
 // multiple of 8 so the sub-bitmap lands on a byte boundary.
 #define ICON_W 32
 #define ICON_H 28
 #define ICON_GAP 2
-#define ICON_TOP 198
-// Width reserved for the temperature, enough for "100°". What is left of the
-// strip after the icon and this goes to the date, which is why the info font is
-// condensed. tools/mockup.py prints both.
-#define INFO_TEMP_W 36
+// Width reserved for the temperature, enough for "100°" at the info size. What
+// is left of the row after the battery, this and the icon goes to the date,
+// which is why the info font is condensed. tools/mockup.py prints both.
+#define INFO_TEMP_W 30
 
 #define BATT_W 21
 #define BATT_H 10
 #define BATT_RIGHT_PAD 6
-#define BATT_TOP 4
+// Centred on the weather icon it shares the row with: ICON_TOP + (ICON_H - BATT_H) / 2.
+#define BATT_TOP 11
+// The bluetooth icon has no corner left in the info row, so it goes at the left
+// end of the time row -- which is empty, because the time is centred and at its
+// widest reaches only x=48. Drawn from y-1 to y+11, so this centres it on the
+// time row.
 #define BT_W 12
+#define BT_LEFT EDGE_PAD
+#define BT_TOP (TIME_TOP + (TIME_HEIGHT - 12) / 2 + 1)
 
-// The tile is black and white, so the whole face is. The strip has no fill of
-// its own -- a hairline rule is enough to part the date from the time, and a
-// slab of colour under a black-and-white flower would be the only loud thing on
-// the screen.
-#define PANEL_BG GColorBlack
-#define PANEL_RULE_COLOR GColorWhite
+// The tile is black and white, so the whole face is.
 #define INFO_COLOR GColorWhite
 #define TIME_COLOR GColorWhite
 #define STATUS_COLOR GColorWhite
@@ -157,8 +192,9 @@ static void prv_draw_bluetooth(GContext *ctx, GRect bounds) {
   if (s_connected) {
     return;
   }
-  const int x = bounds.size.w - BATT_RIGHT_PAD - BATT_W - 3 - BT_W - 6;
-  const int y = BATT_TOP;
+  (void)bounds;
+  const int x = BT_LEFT;
+  const int y = BT_TOP;
   graphics_context_set_stroke_color(ctx, STATUS_COLOR);
   graphics_context_set_stroke_width(ctx, 2);
   graphics_draw_line(ctx, GPoint(x, y + 2), GPoint(x + 7, y + 8));
@@ -170,43 +206,41 @@ static void prv_draw_bluetooth(GContext *ctx, GRect bounds) {
 static void prv_canvas_update(Layer *layer, GContext *ctx) {
   const GRect bounds = layer_get_bounds(layer);
 
-  // The flower. The bitmap is only the top ART_H of the screen; the window's
-  // black background carries the rest, which is the same black the artwork's own
-  // ground is drawn in, so there is no seam to hide.
+  // The flower. The bitmap is only the ART_H band below the header; the window's
+  // black background carries the header, which is the same black the artwork's
+  // own ground is drawn in, so there is no seam to hide and the header needs no
+  // fill of its own.
   if (s_tile) {
     graphics_context_set_compositing_mode(ctx, GCompOpAssign);
-    graphics_draw_bitmap_in_rect(ctx, s_tile, gbitmap_get_bounds(s_tile));
+    graphics_draw_bitmap_in_rect(ctx, s_tile, GRect(0, ART_TOP, bounds.size.w, ART_H));
   }
 
   prv_draw_battery(ctx, bounds);
   prv_draw_bluetooth(ctx, bounds);
 
-  // Info strip.
-  graphics_context_set_fill_color(ctx, PANEL_BG);
-  graphics_fill_rect(ctx, GRect(0, PANEL_TOP, bounds.size.w, bounds.size.h - PANEL_TOP), 0,
-                     GCornerNone);
-  graphics_context_set_fill_color(ctx, PANEL_RULE_COLOR);
-  graphics_fill_rect(ctx, GRect(0, PANEL_TOP, bounds.size.w, PANEL_RULE), 0, GCornerNone);
+  graphics_context_set_fill_color(ctx, RULE_COLOR);
+  graphics_fill_rect(ctx, GRect(0, RULE_TOP, bounds.size.w, RULE_H), 0, GCornerNone);
 
   graphics_context_set_text_color(ctx, TIME_COLOR);
   graphics_draw_text(ctx, s_time_text, s_time_font,
                      GRect(TIME_LEFT, TIME_TOP, TIME_WIDTH, TIME_HEIGHT),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // The weather sits against the right edge; the date gets everything to the
-  // left of it, so it never has to be truncated.
-  const int icon_x = bounds.size.w - EDGE_PAD - INFO_TEMP_W - ICON_GAP - ICON_W;
+  // The battery holds the right end of the row, the weather sits inboard of it,
+  // and the date gets everything left of that, so the date is never truncated.
+  const int batt_x = bounds.size.w - BATT_RIGHT_PAD - BATT_W - 3;
+  const int temp_x = batt_x - INFO_GAP - INFO_TEMP_W;
+  const int icon_x = temp_x - ICON_GAP - ICON_W;
 
   graphics_context_set_text_color(ctx, INFO_COLOR);
   graphics_draw_text(ctx, s_date_text, s_info_font,
-                     GRect(EDGE_PAD, INFO_TOP, icon_x - EDGE_PAD - ICON_GAP, INFO_HEIGHT),
+                     GRect(EDGE_PAD, INFO_TOP, icon_x - EDGE_PAD - INFO_GAP, INFO_HEIGHT),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
   if (s_has_weather) {
-    graphics_draw_text(
-        ctx, s_temp_text, s_info_font,
-        GRect(bounds.size.w - EDGE_PAD - INFO_TEMP_W, INFO_TOP, INFO_TEMP_W, INFO_HEIGHT),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+    graphics_draw_text(ctx, s_temp_text, s_info_font,
+                       GRect(temp_x, INFO_TOP, INFO_TEMP_W, INFO_HEIGHT),
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
     if (s_weather_icon) {
       graphics_context_set_compositing_mode(ctx, GCompOpSet);
       graphics_draw_bitmap_in_rect(ctx, s_weather_icon,
@@ -319,7 +353,7 @@ static void prv_window_load(Window *window) {
   s_tile = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_TILE);
   s_weather_sheet = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_WEATHER_ICONS);
   s_time_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TIME_38));
-  s_info_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_INFO_22));
+  s_info_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_INFO_18));
 
   s_canvas = layer_create(bounds);
   layer_set_update_proc(s_canvas, prv_canvas_update);

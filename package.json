@@ -47,7 +47,7 @@
         },
         {
           "type": "font",
-          "name": "FONT_INFO_22",
+          "name": "FONT_INFO_18",
           "file": "fonts/info.ttf",
           "characterRegex": "[A-Z0-9 °]"
         }

@@ -2,8 +2,8 @@
 
 A Pebble Time 2 watchface built around the White Lotus tile from *Avatar: The
 Last Airbender* — the Pai Sho tile the Order of the White Lotus uses as its
-sign. The flower fills the top of the screen, the time sits under it, and a
-strip across the bottom carries the day, date and weather.
+sign. The day, date, weather and battery share one line across the top, the
+time sits under them, and the flower fills everything below.
 
 ![preview](preview.png)
 
@@ -60,15 +60,40 @@ Two things about the source are worth knowing before touching
 
 ## Layout
 
-Everything is drawn by one update proc in `src/c/lotus.c`, in three bands: the
-flower bitmap down to y=146, the time under it, and the strip from y=196. The
-`LAYOUT` block at the top of that file has every coordinate.
+Everything is drawn by one update proc in `src/c/lotus.c`, in two blocks: a
+header down to y=82 — an info row of day, date, weather and battery, a hairline,
+then the time — and the flower bitmap filling y=82 to the bottom. The `LAYOUT`
+block at the top of that file has every coordinate.
 
-The time is **below** the flower rather than on it. The tile's centre is the
-seed pod — the single feature that identifies it as the White Lotus tile at all
-— so putting the time there would mean drawing over the one part of the artwork
-worth having. In exchange the time gets the full screen width instead of a chord
-across the middle of a disc, which is why it can be 38px.
+Every readable thing is in the header because **a timeline peek slides up from
+the bottom of the screen** and holds a band of it for as long as it is up.
+Whatever is down there is hidden for that whole time. The face used to put the
+time at the bottom, and every notification cut it in half
+(`screenshots/before-quickview.png`); moving only the time up would have handed
+the same problem to the date and weather. So the flower takes the hit instead —
+it is the same flower it was a second ago, and half of it still reads as the
+tile.
+
+The time is **off** the flower, not on it, for a separate reason. The tile's
+centre is the seed pod — the single feature that identifies it as the White
+Lotus tile at all — so putting the time there would mean drawing over the one
+part of the artwork worth having. In exchange the time gets the full screen
+width instead of a chord across the middle of a disc, which is why it can be
+38px.
+
+Four things on one line is what sets the info font size. At 22px the widest date
+the clock can produce, `WED SEPT 30`, is 104px, and that plus the icon, the
+temperature and the gauge overruns the 200 by about 20. Dropping the weekday
+would buy it back at a stroke, but the weekday is half of why anyone reads a
+date on a watch — so the row gives up type size instead and the font is 18px,
+which keeps the whole date with 3px to spare.
+
+The bluetooth icon has no corner left in that row, so it goes at the left end of
+the time row, which is empty: the time is centred and at its widest starts at
+x=48.
+
+The header and the art fill the 228px exactly — 82 + 146 — so growing the header
+means regenerating the art shorter.
 
 `tools/mockup.py` measures the fits that can silently overflow and exits
 non-zero if any slack goes negative, so run it after changing a font size,
@@ -76,9 +101,11 @@ non-zero if any slack goes negative, so run it after changing a font size,
 
 ```
 time  23:58  103x29  in band 200x48  slack +97 wide +19 tall
-band  146..194  strip at 196  slack  +2
-date  WED SEPT 30 104  in strip 116  slack +12
-temp  100°         34  in  36       slack  +2
+bt    23:58  starts  48  icon ends  18      slack +30
+head  info 4..30  rule 32  time 34..82  art at 82  slack  +0
+art   82..228  screen 228  slack  +0
+date  WED SEPT 30  85  in row    88  slack  +3
+temp  100°         28  in  30       slack  +2
 ```
 
 ## Weather
@@ -97,8 +124,12 @@ Temperature is in Fahrenheit. To switch, change `UNITS` at the top of
 `src/pkjs/index.js` to `'celsius'` and rebuild — the watch only ever receives a
 number.
 
-Battery is a gauge in the top right. The bluetooth icon only appears when the
-watch is disconnected, with a double buzz when the link drops.
+Battery is a gauge at the right end of the info row. The bluetooth icon only
+appears when the watch is disconnected, at the left of the time row, with a
+double buzz when the link drops. The emulator's `emu-bt-connection` does not
+drive the Pebble-app connection handler this face subscribes to, so the only way
+to see that icon in the emulator is to build with `s_connected` initialised
+false.
 
 ## Building
 
@@ -115,6 +146,10 @@ Pebble app (Devices → ⋯ → Enable Dev Connect, sign in with GitHub), then
 `pebble install --emulator` does not switch the running emulator to a newly
 installed watchface — it will keep showing whichever face it was already on.
 `pebble kill` first if the screenshot looks like somebody else's watchface.
+
+`pebble emu-set-timeline-quick-view on` raises a peek in the emulator, which is
+how the screenshots in `screenshots/` were taken — it is the quickest way to
+check that a layout change has not put something back under it.
 
 Only `emery` (Pebble Time 2) is in `targetPlatforms`. The artwork and the layout
 are both sized for 200x228; adding another platform means regenerating the art
