@@ -6,8 +6,10 @@ This draws the same thing from the same constants and, more usefully, measures
 the places where the layout can silently overflow:
 
   * the time against its band. It has the full screen width now that it sits
-    below the flower rather than inside the tile's seed pod, so the binding
+    off the flower rather than inside the tile's seed pod, so the binding
     constraint is the band's height, not its width.
+  * the time against the status icons, which share the top band with it now
+    that the time is up there.
   * the date against what the strip leaves it once the weather has taken the
     right-hand end.
 
@@ -32,8 +34,9 @@ FONTS = os.path.join(ROOT, "resources", "fonts")
 # Mirrors the LAYOUT block in src/c/lotus.c.
 SCREEN_W, SCREEN_H = 200, 228
 TIME_SIZE = 38
-TIME_TOP = ba.ART_H
-TIME_HEIGHT = 48
+TIME_TOP = 0
+TIME_HEIGHT = 50
+ART_TOP = TIME_HEIGHT
 INFO_SIZE = 22
 PANEL_TOP = 196
 PANEL_RULE = 1
@@ -41,6 +44,7 @@ INFO_TOP = 200
 EDGE_PAD = 6
 ICON_W, ICON_H, ICON_GAP, ICON_TOP = 32, 28, 2, 198
 INFO_TEMP_W = 36
+BATT_W, BATT_H, BATT_RIGHT_PAD, BATT_TOP, BT_W = 21, 10, 6, 4, 12
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -61,10 +65,17 @@ def draw_face(time_text, date_text, temp_text, icon_index):
     info_font = ImageFont.truetype(os.path.join(FONTS, "info.ttf"), INFO_SIZE)
 
     face = Image.new("RGB", (SCREEN_W, SCREEN_H), BLACK)
-    face.paste(ba.tile(), (0, 0))
+    face.paste(ba.tile(), (0, ART_TOP))
     d = ImageDraw.Draw(face)
 
     d.rectangle([0, PANEL_TOP, SCREEN_W, PANEL_TOP + PANEL_RULE - 1], fill=WHITE)
+
+    # The battery, because it is the thing the time is now closest to.
+    bx = SCREEN_W - BATT_RIGHT_PAD - BATT_W - 3
+    d.rectangle([bx, BATT_TOP, bx + BATT_W - 1, BATT_TOP + BATT_H - 1], outline=WHITE)
+    d.rectangle([bx + BATT_W, BATT_TOP + 3, bx + BATT_W + 2, BATT_TOP + BATT_H - 4], fill=WHITE)
+    d.rectangle([bx + 1, BATT_TOP + 1, bx + 1 + (BATT_W - 2) * 3 // 4, BATT_TOP + BATT_H - 2],
+                fill=WHITE)
 
     d.text((SCREEN_W / 2, TIME_TOP + TIME_HEIGHT / 2), time_text, font=time_font,
            fill=WHITE, anchor="mm")
@@ -96,10 +107,25 @@ def check():
         if w > SCREEN_W or h > TIME_HEIGHT:
             ok = False
 
-    # The band has to end before the strip does, or the time overlaps the date.
-    print("band  %d..%d  strip at %d  slack %+3d" % (TIME_TOP, TIME_TOP + TIME_HEIGHT,
-                                                     PANEL_TOP, PANEL_TOP - TIME_TOP - TIME_HEIGHT))
-    if TIME_TOP + TIME_HEIGHT > PANEL_TOP:
+    # The time is centred in the top band, with bluetooth in the left corner and
+    # the battery in the right. Both gaps have to stay open.
+    bt_right = EDGE_PAD + BT_W
+    batt_left = SCREEN_W - BATT_RIGHT_PAD - BATT_W - 3
+    for s in WIDEST_TIME:
+        w, _ = text_size(time_font, s)
+        left, right = SCREEN_W / 2 - w / 2, SCREEN_W / 2 + w / 2
+        slack = min(left - bt_right, batt_left - right)
+        print("stat  %-6s %3d..%-3d between icons %d and %d  slack %+3d"
+              % (s, left, right, bt_right, batt_left, slack))
+        if slack < 0:
+            ok = False
+
+    # The three bands fill the screen exactly: the flower has to start where the
+    # time band ends and stop before the strip's rule.
+    print("band  time %d..%d  art %d..%d  strip at %d  slack %+3d"
+          % (TIME_TOP, TIME_TOP + TIME_HEIGHT, ART_TOP, ART_TOP + ba.ART_H, PANEL_TOP,
+             PANEL_TOP - ART_TOP - ba.ART_H))
+    if TIME_TOP + TIME_HEIGHT > ART_TOP or ART_TOP + ba.ART_H > PANEL_TOP:
         ok = False
 
     icon_x = SCREEN_W - EDGE_PAD - INFO_TEMP_W - ICON_GAP - ICON_W

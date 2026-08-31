@@ -5,7 +5,7 @@
 // White Lotus watchface for emery (Pebble Time 2, 200x228).
 //
 // The whole face is one layer with a single update proc, in three bands: the
-// tile's flower across the top as a bitmap, the time under it, and a strip
+// time across the top, the tile's flower under it as a bitmap, and a strip
 // across the bottom carrying the day, date and weather. Everything is drawn
 // from cached strings so the update proc never formats anything itself.
 
@@ -13,19 +13,31 @@
 // LAYOUT -- keep in sync with tools/build_assets.py and tools/mockup.py
 // ---------------------------------------------------------------------------
 // The tile artwork is traced by tools/build_assets.py, which owns its geometry.
-// Only ART_H matters here: the bitmap covers y=0..145 and the time band starts
-// where it stops.
+// Only ART_H matters here: the bitmap is that tall and gets placed at ART_TOP.
 #define ART_H 146
 
-// The time sits below the flower rather than on it. The tile's centre is a seed
-// pod of small dots -- the thing that identifies it as the White Lotus tile at
-// all -- so putting the time there would mean drawing over the one part of the
-// artwork worth keeping. Below it, the time gets the full screen width instead
-// of a chord across a medallion, which is why it can be this large.
+// The time is above the flower, not on it and not below it.
+//
+// Not on it, because the tile's centre is a seed pod of small dots -- the thing
+// that identifies it as the White Lotus tile at all -- so the time there would
+// cover the one part of the artwork worth keeping. Off the flower, the time gets
+// the full screen width instead of a chord across a medallion, which is why it
+// can be this large.
+//
+// Above rather than below, because a timeline peek slides up from the bottom of
+// the screen and covers a band of it for as long as it is up. Whatever sits down
+// there is the thing that gets hidden, and the time is the one item on this face
+// that has to be readable at a glance without dismissing anything first. The
+// date and weather take the hit instead.
 #define TIME_LEFT 0
 #define TIME_WIDTH 200
-#define TIME_TOP ART_H
-#define TIME_HEIGHT 48
+#define TIME_TOP 0
+#define TIME_HEIGHT 50
+
+// What is left between the time and the strip's rule is exactly the bitmap:
+// 50 + 146 = 196 = PANEL_TOP. The three bands fill the screen with nothing to
+// spare, so moving any one of them means moving another.
+#define ART_TOP TIME_HEIGHT
 
 // The info strip.
 #define PANEL_TOP 196
@@ -129,6 +141,10 @@ static void prv_set_weather_icon(int index) {
   }
 }
 
+// The status icons share the top band with the time: bluetooth in the left
+// corner, battery in the right, the time centred between them. At its widest --
+// "23:58" -- the time is 103px of the 200, so there is room on both sides;
+// tools/mockup.py checks both gaps.
 static void prv_draw_battery(GContext *ctx, GRect bounds) {
   const int x = bounds.size.w - BATT_RIGHT_PAD - BATT_W - 3;  // 3px for the nub
 
@@ -157,7 +173,11 @@ static void prv_draw_bluetooth(GContext *ctx, GRect bounds) {
   if (s_connected) {
     return;
   }
-  const int x = bounds.size.w - BATT_RIGHT_PAD - BATT_W - 3 - BT_W - 6;
+  // In the opposite corner from the battery rather than beside it. Beside it,
+  // the pair reached far enough in from the right that a 24h "23:58" came
+  // within a pixel of the icon; split across the two corners, the time has the
+  // same room on either side and neither icon is anywhere near it.
+  const int x = EDGE_PAD;
   const int y = BATT_TOP;
   graphics_context_set_stroke_color(ctx, STATUS_COLOR);
   graphics_context_set_stroke_width(ctx, 2);
@@ -170,12 +190,13 @@ static void prv_draw_bluetooth(GContext *ctx, GRect bounds) {
 static void prv_canvas_update(Layer *layer, GContext *ctx) {
   const GRect bounds = layer_get_bounds(layer);
 
-  // The flower. The bitmap is only the top ART_H of the screen; the window's
+  // The flower. The bitmap is only the ART_H band under the time; the window's
   // black background carries the rest, which is the same black the artwork's own
-  // ground is drawn in, so there is no seam to hide.
+  // ground is drawn in, so there is no seam to hide -- including the band the
+  // time is drawn into, which is why that band needs no fill of its own.
   if (s_tile) {
     graphics_context_set_compositing_mode(ctx, GCompOpAssign);
-    graphics_draw_bitmap_in_rect(ctx, s_tile, gbitmap_get_bounds(s_tile));
+    graphics_draw_bitmap_in_rect(ctx, s_tile, GRect(0, ART_TOP, bounds.size.w, ART_H));
   }
 
   prv_draw_battery(ctx, bounds);
