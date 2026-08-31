@@ -2,8 +2,8 @@
 
 A Pebble Time 2 watchface built around the White Lotus tile from *Avatar: The
 Last Airbender* — the Pai Sho tile the Order of the White Lotus uses as its
-sign. The time runs across the top, the flower fills the middle, and a strip
-across the bottom carries the day, date and weather.
+sign. The time, day, date and weather sit in a header across the top, and the
+flower fills everything below it.
 
 ![preview](preview.png)
 
@@ -60,35 +60,42 @@ Two things about the source are worth knowing before touching
 
 ## Layout
 
-Everything is drawn by one update proc in `src/c/lotus.c`, in three bands: the
-time down to y=50, the flower bitmap from there to y=196, and the strip from
-y=196. The `LAYOUT` block at the top of that file has every coordinate.
+Everything is drawn by one update proc in `src/c/lotus.c`, in two blocks: a
+header down to y=82 — the time, a hairline, then the day, date and weather in
+one row — and the flower bitmap filling y=82 to the bottom. The `LAYOUT` block
+at the top of that file has every coordinate.
 
-The time is **off** the flower, not on it. The tile's centre is the seed pod —
-the single feature that identifies it as the White Lotus tile at all — so
-putting the time there would mean drawing over the one part of the artwork worth
-having. In exchange the time gets the full screen width instead of a chord
-across the middle of a disc, which is why it can be 38px.
+Every readable thing is in the header because **a timeline peek slides up from
+the bottom of the screen** and holds a band of it for as long as it is up.
+Whatever is down there is hidden for that whole time. The face used to put the
+time at the bottom, and every notification cut it in half
+(`screenshots/before-quickview.png`); moving only the time up would have handed
+the same problem to the date and weather. So the flower takes the hit instead —
+it is the same flower it was a second ago, and half of it still reads as the
+tile.
 
-It is **above** the flower rather than below it because a timeline peek slides
-up from the bottom of the screen and holds a band of it for as long as it is up.
-With the time down there the peek cut it in half; the strip takes the hit
-instead, and losing the date and weather for a few seconds costs nothing.
+The time is **off** the flower, not on it, for a separate reason. The tile's
+centre is the seed pod — the single feature that identifies it as the White
+Lotus tile at all — so putting the time there would mean drawing over the one
+part of the artwork worth having. In exchange the time gets the full screen
+width instead of a chord across the middle of a disc, which is why it can be
+38px.
 
-The three bands fill the 228px exactly — 50 + 146 + 32 — so there is no slack to
-move one without moving another. The status icons share the top band with the
-time: bluetooth in the left corner, battery in the right, the time centred
-between them with 18px to spare on each side at its widest.
+The header and the art fill the 228px exactly — 82 + 146 — so growing the header
+means regenerating the art shorter. The status icons take the two top corners,
+with the time centred between them and 18px to spare on each side at its
+widest.
 
 `tools/mockup.py` measures the fits that can silently overflow and exits
 non-zero if any slack goes negative, so run it after changing a font size,
 `ART_H`, or `INFO_TEMP_W`:
 
 ```
-time  23:58  103x29  in band 200x50  slack +97 wide +21 tall
+time  23:58  103x29  in band 200x48  slack +97 wide +19 tall
 stat  23:58   48..151 between icons 18 and 170  slack +18
-band  time 0..50  art 50..196  strip at 196  slack  +0
-date  WED SEPT 30 104  in strip 116  slack +12
+head  time 0..48  rule 48  info 52..78  art at 82  slack  +4
+art   82..228  screen 228  slack  +0
+date  WED SEPT 30 104  in row   116  slack +12
 temp  100°         34  in  36       slack  +2
 ```
 
@@ -126,6 +133,10 @@ Pebble app (Devices → ⋯ → Enable Dev Connect, sign in with GitHub), then
 `pebble install --emulator` does not switch the running emulator to a newly
 installed watchface — it will keep showing whichever face it was already on.
 `pebble kill` first if the screenshot looks like somebody else's watchface.
+
+`pebble emu-set-timeline-quick-view on` raises a peek in the emulator, which is
+how the screenshots in `screenshots/` were taken — it is the quickest way to
+check that a layout change has not put something back under it.
 
 Only `emery` (Pebble Time 2) is in `targetPlatforms`. The artwork and the layout
 are both sized for 200x228; adding another platform means regenerating the art

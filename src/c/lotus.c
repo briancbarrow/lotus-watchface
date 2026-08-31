@@ -4,10 +4,10 @@
 
 // White Lotus watchface for emery (Pebble Time 2, 200x228).
 //
-// The whole face is one layer with a single update proc, in three bands: the
-// time across the top, the tile's flower under it as a bitmap, and a strip
-// across the bottom carrying the day, date and weather. Everything is drawn
-// from cached strings so the update proc never formats anything itself.
+// The whole face is one layer with a single update proc, in two blocks: a
+// header carrying the time, the day, the date, the weather and the status
+// icons, and the tile's flower under it as a bitmap. Everything is drawn from
+// cached strings so the update proc never formats anything itself.
 
 // ---------------------------------------------------------------------------
 // LAYOUT -- keep in sync with tools/build_assets.py and tools/mockup.py
@@ -16,43 +16,51 @@
 // Only ART_H matters here: the bitmap is that tall and gets placed at ART_TOP.
 #define ART_H 146
 
-// The time is above the flower, not on it and not below it.
+// Every readable thing is in a header above the flower.
 //
-// Not on it, because the tile's centre is a seed pod of small dots -- the thing
-// that identifies it as the White Lotus tile at all -- so the time there would
-// cover the one part of the artwork worth keeping. Off the flower, the time gets
-// the full screen width instead of a chord across a medallion, which is why it
-// can be this large.
+// A timeline peek slides up from the bottom of the screen and holds a band of it
+// for as long as it is up. Whatever sits down there is hidden for that whole
+// time, so the question is what the face can afford to lose. Not the time, and
+// not the date or the weather either -- they are the reason to look at a
+// watchface at all. The flower can: it is the same flower it was a second ago,
+// and half of it still reads as the tile.
 //
-// Above rather than below, because a timeline peek slides up from the bottom of
-// the screen and covers a band of it for as long as it is up. Whatever sits down
-// there is the thing that gets hidden, and the time is the one item on this face
-// that has to be readable at a glance without dismissing anything first. The
-// date and weather take the hit instead.
+// The time is off the flower rather than on it for a separate reason. The tile's
+// centre is a seed pod of small dots -- the thing that identifies it as the
+// White Lotus tile at all -- so the time there would cover the one part of the
+// artwork worth keeping. Off it, the time gets the full screen width instead of
+// a chord across a medallion, which is why it can be this large.
 #define TIME_LEFT 0
 #define TIME_WIDTH 200
 #define TIME_TOP 0
-#define TIME_HEIGHT 50
+#define TIME_HEIGHT 48
 
-// What is left between the time and the strip's rule is exactly the bitmap:
-// 50 + 146 = 196 = PANEL_TOP. The three bands fill the screen with nothing to
-// spare, so moving any one of them means moving another.
-#define ART_TOP TIME_HEIGHT
+// A hairline parts the time from the row under it. There is no fill behind
+// either: the window's black is already the black the artwork's own ground is
+// drawn in, so there is no seam to hide, and a slab of colour under a
+// black-and-white flower would be the only loud thing on the screen.
+#define RULE_TOP 48
+#define RULE_H 1
+#define RULE_COLOR GColorWhite
 
-// The info strip.
-#define PANEL_TOP 196
-#define PANEL_RULE 1
-#define INFO_TOP 200
+// The day, date and weather, in one row under the rule. The icon rides 2px
+// higher than the text so their optical centres line up.
+#define ICON_TOP 50
+#define INFO_TOP 52
 #define INFO_HEIGHT 26
 #define EDGE_PAD 6
+
+// The flower gets whatever the header does not, and ART_H is fixed, so this is
+// forced: 82 + 146 = 228, the whole screen, with nothing spare in either
+// direction. Growing the header means regenerating the art shorter.
+#define ART_TOP 82
 // Frame size in resources/images/weather_icons.png. ICON_W must stay a
 // multiple of 8 so the sub-bitmap lands on a byte boundary.
 #define ICON_W 32
 #define ICON_H 28
 #define ICON_GAP 2
-#define ICON_TOP 198
 // Width reserved for the temperature, enough for "100°". What is left of the
-// strip after the icon and this goes to the date, which is why the info font is
+// row after the icon and this goes to the date, which is why the info font is
 // condensed. tools/mockup.py prints both.
 #define INFO_TEMP_W 36
 
@@ -62,12 +70,7 @@
 #define BATT_TOP 4
 #define BT_W 12
 
-// The tile is black and white, so the whole face is. The strip has no fill of
-// its own -- a hairline rule is enough to part the date from the time, and a
-// slab of colour under a black-and-white flower would be the only loud thing on
-// the screen.
-#define PANEL_BG GColorBlack
-#define PANEL_RULE_COLOR GColorWhite
+// The tile is black and white, so the whole face is.
 #define INFO_COLOR GColorWhite
 #define TIME_COLOR GColorWhite
 #define STATUS_COLOR GColorWhite
@@ -141,10 +144,9 @@ static void prv_set_weather_icon(int index) {
   }
 }
 
-// The status icons share the top band with the time: bluetooth in the left
-// corner, battery in the right, the time centred between them. At its widest --
-// "23:58" -- the time is 103px of the 200, so there is room on both sides;
-// tools/mockup.py checks both gaps.
+// The status icons take the two top corners, with the time centred between them.
+// At its widest -- "23:58" -- the time is 103px of the 200, so there is room on
+// both sides; tools/mockup.py checks both gaps.
 static void prv_draw_battery(GContext *ctx, GRect bounds) {
   const int x = bounds.size.w - BATT_RIGHT_PAD - BATT_W - 3;  // 3px for the nub
 
@@ -190,10 +192,10 @@ static void prv_draw_bluetooth(GContext *ctx, GRect bounds) {
 static void prv_canvas_update(Layer *layer, GContext *ctx) {
   const GRect bounds = layer_get_bounds(layer);
 
-  // The flower. The bitmap is only the ART_H band under the time; the window's
-  // black background carries the rest, which is the same black the artwork's own
-  // ground is drawn in, so there is no seam to hide -- including the band the
-  // time is drawn into, which is why that band needs no fill of its own.
+  // The flower. The bitmap is only the ART_H band below the header; the window's
+  // black background carries the header, which is the same black the artwork's
+  // own ground is drawn in, so there is no seam to hide and the header needs no
+  // fill of its own.
   if (s_tile) {
     graphics_context_set_compositing_mode(ctx, GCompOpAssign);
     graphics_draw_bitmap_in_rect(ctx, s_tile, GRect(0, ART_TOP, bounds.size.w, ART_H));
@@ -202,12 +204,8 @@ static void prv_canvas_update(Layer *layer, GContext *ctx) {
   prv_draw_battery(ctx, bounds);
   prv_draw_bluetooth(ctx, bounds);
 
-  // Info strip.
-  graphics_context_set_fill_color(ctx, PANEL_BG);
-  graphics_fill_rect(ctx, GRect(0, PANEL_TOP, bounds.size.w, bounds.size.h - PANEL_TOP), 0,
-                     GCornerNone);
-  graphics_context_set_fill_color(ctx, PANEL_RULE_COLOR);
-  graphics_fill_rect(ctx, GRect(0, PANEL_TOP, bounds.size.w, PANEL_RULE), 0, GCornerNone);
+  graphics_context_set_fill_color(ctx, RULE_COLOR);
+  graphics_fill_rect(ctx, GRect(0, RULE_TOP, bounds.size.w, RULE_H), 0, GCornerNone);
 
   graphics_context_set_text_color(ctx, TIME_COLOR);
   graphics_draw_text(ctx, s_time_text, s_time_font,

@@ -8,10 +8,10 @@ the places where the layout can silently overflow:
   * the time against its band. It has the full screen width now that it sits
     off the flower rather than inside the tile's seed pod, so the binding
     constraint is the band's height, not its width.
-  * the time against the status icons, which share the top band with it now
-    that the time is up there.
-  * the date against what the strip leaves it once the weather has taken the
+  * the time against the status icons, which share the top row with it.
+  * the date against what the info row leaves it once the weather has taken the
     right-hand end.
+  * the header against the flower, which has to fit in what is left of the 228.
 
 Each is reported with its slack, and the script exits non-zero if any has run
 out -- so this is worth running after any change to a font size, to ART_H, or to
@@ -35,14 +35,15 @@ FONTS = os.path.join(ROOT, "resources", "fonts")
 SCREEN_W, SCREEN_H = 200, 228
 TIME_SIZE = 38
 TIME_TOP = 0
-TIME_HEIGHT = 50
-ART_TOP = TIME_HEIGHT
+TIME_HEIGHT = 48
+RULE_TOP = 48
+RULE_H = 1
 INFO_SIZE = 22
-PANEL_TOP = 196
-PANEL_RULE = 1
-INFO_TOP = 200
+INFO_TOP = 52
+INFO_HEIGHT = 26
+ART_TOP = 82
 EDGE_PAD = 6
-ICON_W, ICON_H, ICON_GAP, ICON_TOP = 32, 28, 2, 198
+ICON_W, ICON_H, ICON_GAP, ICON_TOP = 32, 28, 2, 50
 INFO_TEMP_W = 36
 BATT_W, BATT_H, BATT_RIGHT_PAD, BATT_TOP, BT_W = 21, 10, 6, 4, 12
 
@@ -68,7 +69,7 @@ def draw_face(time_text, date_text, temp_text, icon_index):
     face.paste(ba.tile(), (0, ART_TOP))
     d = ImageDraw.Draw(face)
 
-    d.rectangle([0, PANEL_TOP, SCREEN_W, PANEL_TOP + PANEL_RULE - 1], fill=WHITE)
+    d.rectangle([0, RULE_TOP, SCREEN_W, RULE_TOP + RULE_H - 1], fill=WHITE)
 
     # The battery, because it is the thing the time is now closest to.
     bx = SCREEN_W - BATT_RIGHT_PAD - BATT_W - 3
@@ -120,18 +121,24 @@ def check():
         if slack < 0:
             ok = False
 
-    # The three bands fill the screen exactly: the flower has to start where the
-    # time band ends and stop before the strip's rule.
-    print("band  time %d..%d  art %d..%d  strip at %d  slack %+3d"
-          % (TIME_TOP, TIME_TOP + TIME_HEIGHT, ART_TOP, ART_TOP + ba.ART_H, PANEL_TOP,
-             PANEL_TOP - ART_TOP - ba.ART_H))
-    if TIME_TOP + TIME_HEIGHT > ART_TOP or ART_TOP + ba.ART_H > PANEL_TOP:
+    # The header and the flower fill the screen exactly: the info row has to end
+    # before the art starts, and the art has to end before the screen does.
+    info_bottom = max(INFO_TOP + INFO_HEIGHT, ICON_TOP + ICON_H)
+    print("head  time %d..%d  rule %d  info %d..%d  art at %d  slack %+3d"
+          % (TIME_TOP, TIME_TOP + TIME_HEIGHT, RULE_TOP, INFO_TOP, info_bottom, ART_TOP,
+             ART_TOP - info_bottom))
+    if TIME_TOP + TIME_HEIGHT > RULE_TOP or info_bottom > ART_TOP:
+        ok = False
+
+    print("art   %d..%d  screen %d  slack %+3d"
+          % (ART_TOP, ART_TOP + ba.ART_H, SCREEN_H, SCREEN_H - ART_TOP - ba.ART_H))
+    if ART_TOP + ba.ART_H > SCREEN_H:
         ok = False
 
     icon_x = SCREEN_W - EDGE_PAD - INFO_TEMP_W - ICON_GAP - ICON_W
     room = icon_x - EDGE_PAD - ICON_GAP
     w, _ = text_size(info_font, WIDEST_DATE)
-    print("date  %-11s %3d  in strip %3d  slack %+3d" % (WIDEST_DATE, w, room, room - w))
+    print("date  %-11s %3d  in row   %3d  slack %+3d" % (WIDEST_DATE, w, room, room - w))
     if w > room:
         ok = False
 
